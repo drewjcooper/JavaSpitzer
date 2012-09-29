@@ -20,6 +20,7 @@ namespace JavaSpitzer
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Reflection;
 
     public abstract class Enumeration<TEnum>
         where TEnum : Enumeration<TEnum>
@@ -32,11 +33,11 @@ namespace JavaSpitzer
         protected readonly string name;
         protected readonly int ordinal;
 
-        protected Enumeration(string name)
+        protected Enumeration()
         {
-            this.name = name;
             ordinal = nextOrdinal++;
             byOrdinal.Add(ordinal, (TEnum)this);
+            name = typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)[ordinal].Name;
             byName.Add(name, (TEnum)this);
         }
 
@@ -67,19 +68,79 @@ namespace JavaSpitzer
             return ordinal.GetHashCode();
         }
 
-        private Type EnumType
-        {
-            get { return typeof(TEnum); }
-        }
-
         public static IEnumerable<TEnum> Values
         {
             get { return byOrdinal.Values; }
         }
 
-        public static explicit operator int(Enumeration<TEnum> obj)
+        public static implicit operator string(Enumeration<TEnum> obj)
         {
-            return obj.ordinal;
+            return obj.name;
+        }
+
+        public static TEnum Parse(string value)
+        {
+            return Parse(value, false);
+        }
+
+        public static bool TryParse(string value, out TEnum result)
+        {
+            if (value == null)
+            {
+                result = null;
+                return false;
+            }
+            
+            return byName.TryGetValue(value, out result);
+        }
+
+        public static TEnum Parse(string value, bool ignoreCase)
+        {
+            if (value == null)
+            {
+                throw new ArgumentNullException(value, String.Format("Value cannot be null.{0}Parameter name: value", Environment.NewLine));
+            }
+
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("Must specify valid information for parsing in the string.");
+            }
+
+            TEnum result;
+            if (TryParse(value, ignoreCase, out result))
+            {
+                return result;
+            }
+            else
+            {
+                throw new ArgumentException(String.Format("Requested value '{0}' was not found.", value));
+            }
+        }
+
+        public static bool TryParse(string value, bool ignoreCase, out TEnum result)
+        {
+            if (value == null)
+            {
+                result = null;
+                return false;
+            }
+
+            if (!ignoreCase)
+            {
+                return TryParse(value, out result);
+            }
+            
+            var entry = byName.Where(kvp => kvp.Key.Equals(value, StringComparison.InvariantCultureIgnoreCase));
+            if (entry.Count() == 0)
+            {
+                result = null;
+                return false;
+            }
+            else
+            {
+                result = entry.First().Value;
+                return true;
+            }
         }
     }
 }
